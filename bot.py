@@ -1,27 +1,26 @@
 import discord
 import os
 from discord.ext import commands
+import logging
+import configparser
+
+config = configparser.ConfigParser()
+config.read('bot.ini')
+TOKEN = config.get('bot', 'token')
 
 intents = discord.Intents.all()
-client = discord.Client(intents=intents)
-
 bot = commands.Bot(command_prefix="!", intents=intents)
+
 
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
     print(f"Commands: {', '.join([str(command) for command in bot.commands])}")
 
-# 1. Manually load each cog by file name:
-# bot.load_extension("cogs.foo")
-# bot.load_extension("cogs.bar")
-
-# 2. OR load all cogs dynamically:
-# (You can loop through the cogs directory and load each .py file automatically)
 
 for filename in os.listdir("./cogs"):
     if filename.endswith(".py"):
-        extension_name = filename[:-3]  # remove .py
+        extension_name = filename[:-3]
         try:
             bot.load_extension(f"cogs.{extension_name}")
             print(f"Loaded {extension_name} cog successfully!")
@@ -32,17 +31,15 @@ for filename in os.listdir("./cogs"):
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
-        return  # Ignore messages sent by the bot itself
+        return
+    print(f"Received message: {message.content}")
+    await bot.process_commands(message)
 
-    print(f"Received message: {message.content}")  # Debug print
-    await bot.process_commands(message)  # Ensure commands still work
 
 @bot.event
 async def on_command(ctx):
     print(f"Command {ctx.command} called!")
 
-import logging
-logging.basicConfig(level=logging.DEBUG)
 
-# Run the bot
-bot.run("іДі")
+logging.basicConfig(level=logging.INFO)
+bot.run(TOKEN)
