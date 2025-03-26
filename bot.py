@@ -2,14 +2,13 @@ import discord
 import os
 from discord.ext import commands
 import logging
-import configparser
 
-config = configparser.ConfigParser()
-config.read('bot.ini')
+from bot_config import config
+
 TOKEN = config.get('bot', 'token')
 
 intents = discord.Intents.all()
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix=config.get('bot', 'prefix'), intents=intents)
 
 
 @bot.event
