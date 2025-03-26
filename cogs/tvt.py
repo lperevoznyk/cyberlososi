@@ -7,22 +7,28 @@ class TvTVoices(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.users_original_channels = {}
-        self.temp_channels = {}  # Store channel_id: last_empty_timestamp
-        self.master_channel_id = 1351180895268376653  # Replace with your master channel ID
+        self.temp_channels = {}
+        self.master_channel_id = None  # initially unset
         self.delete_task.start()
 
+    @commands.command(name="set_master_tvt_channel",
+                      usage="<channel>",
+                      help="Set the master TvT channel ID by mentioning the channel.")
+    async def set_master_channel(self, ctx: commands.Context, channel: discord.VoiceChannel):
+        self.master_channel_id = channel.id
+        await ctx.send(f"✅ Master TvT voice channel set to {channel.mention}.")
+
     @commands.command(name="move_users",
+                      usage="<target_channel>",
                       help="Move all users from all voice channels in a specific category to one target channel.")
     async def move_users(self, ctx: commands.Context, target_channel: discord.VoiceChannel):
-        # Ensure the target channel is in a category
         category = target_channel.category
         if category is None:
             await ctx.send("Target channel must be in a category.")
             return
 
-        # Save original channel positions for users
         for channel in category.voice_channels:
-            if channel != target_channel:  # Exclude the target channel
+            if channel != target_channel:
                 for member in channel.members:
                     self.users_original_channels[member.id] = channel
                     await member.move_to(target_channel)
@@ -31,20 +37,20 @@ class TvTVoices(commands.Cog):
 
     @commands.command(name="move_back", help="Move users back to their original voice channels.")
     async def move_back(self, ctx: commands.Context):
-        # Move users back to their original channels
         for user_id, original_channel in self.users_original_channels.items():
             user = ctx.guild.get_member(user_id)
             if user and user.voice:
                 await user.move_to(original_channel)
 
-        # Clear the saved data after moving back
         self.users_original_channels.clear()
         await ctx.send("Moved users back to their original channels.")
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState,
                                     after: discord.VoiceState):
-        # User joins the master channel
+        if not self.master_channel_id:
+            return  # Do nothing if master_channel_id isn't set
+
         if after.channel and after.channel.id == self.master_channel_id:
             category = after.channel.category
             temp_channel = await category.create_voice_channel(
@@ -54,27 +60,21 @@ class TvTVoices(commands.Cog):
 
             await member.move_to(temp_channel)
 
-            # Copy permissions from category
             for target, overwrite in category.overwrites.items():
                 if target != category.guild.default_role:
                     await temp_channel.set_permissions(target, overwrite=overwrite)
 
-            # Allow the creator to manage the channel
             await temp_channel.set_permissions(member, manage_channels=True)
 
-            # Initially mark as active, no empty timestamp needed yet
             self.temp_channels[temp_channel.id] = None
 
-        # Check if user left a temporary channel, or rejoined
         affected_channels = set(filter(None, [before.channel, after.channel]))
 
         for channel in affected_channels:
             if channel.id in self.temp_channels:
                 if len(channel.members) == 0:
-                    # Channel just became empty: start timer
                     self.temp_channels[channel.id] = datetime.utcnow()
                 else:
-                    # Channel now has members again: reset timer
                     self.temp_channels[channel.id] = None
 
     @tasks.loop(minutes=30)
@@ -113,7 +113,6 @@ class TvTVoices(commands.Cog):
                 await channel.delete(reason="Manually deleted empty temporary channel.")
                 await ctx.send(f"Deleted empty temporary channel {channel.name}.")
             del self.temp_channels[channel_id]
-
 
 def setup(bot: commands.Bot):
     bot.add_cog(TvTVoices(bot))

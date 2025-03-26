@@ -41,5 +41,23 @@ async def on_command(ctx):
     print(f"Command {ctx.command} called!")
 
 
+@bot.check
+async def globally_block_commands(ctx):
+    permissions_cog = bot.get_cog('Permissions')
+    if permissions_cog:
+        return permissions_cog.has_permission(ctx)
+    return ctx.author.guild_permissions.administrator
+
+
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CheckFailure):
+        logging.warning(f"Permission denied: User {ctx.author} attempted '{ctx.command}' command.")
+        return
+    if isinstance(error, commands.CommandNotFound):
+        return
+    raise error
+
+
 logging.basicConfig(level=logging.INFO)
 bot.run(TOKEN)
